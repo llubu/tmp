@@ -27,7 +27,7 @@ Node *seek_stack(Stack **top);
 
 void trie_insert(Trie *root, char *arr);
 int trie_search(Trie *root, char *arr);
-
+int trie_del(Trie *root, char *arr, int len, int level);
 
 
 

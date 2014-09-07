@@ -117,3 +117,44 @@ int trie_search(Trie *root, char *arr)
     if ( cur->end )
 	return 1;
 }
+
+int trie_del(Trie *root, char *arr, int len, int level)
+{
+    Trie *tmp = NULL;
+    int i = 0, index;
+
+    if ( root ) {
+	if ( len == level ) {
+	    if ( root->end ) {
+		root->end = 0;
+		/* Check if the current node has any child pointers */
+		while ( i < 26 ) {
+		    if ( root->elm[i] )
+			return 0;
+		    ++i;
+		}
+		return 1;
+	    }
+	}
+	else {
+
+	    index = arr[level] - 'a';
+	    if ( trie_del(root->elm[index], arr, len, level+1) ) {
+
+		free(root->elm[index]);
+		root->elm[index] = NULL;
+		
+		if ( !root->end ) {
+		    i = 0;
+		    while ( i < 26 ) {
+			if ( root->elm[i] )
+			    return 0;
+			++i;
+		    }
+		    return 1;
+		}
+	    }
+	}
+    }
+    return 0;
+}

@@ -1,57 +1,62 @@
 #include <stdio.h>
 #include <stdlib.h>
-
-typedef struct node {
-    struct node *next;
-    int data;
-} Node;
-
-Node *push(Node **top, int data)
-{
-    Node *tmp = NULL;
-
-    if ( NULL == (tmp = malloc(sizeof(Node))) )
-	return NULL;
-
-    tmp->data = data;
-    tmp->next = *top;
-    *top = tmp;
-
-    return *top;
-}
-
-
-int pop(Node **top)
-{
-    Node *tmp = *top;
-    int data;
-    
-    if ( !tmp )
-	return -1;
-
-    tmp = *top;
-    data = (*top)->data;
-    *top = tmp->next;
-    free(tmp);
-
-    return data;
-}
+#include <string.h>
+#include "ds.h"
 
 int main()
 {
+    Trie *root = NULL;
+    int i;
+    char keys[][8] = {"she", "sells", "sea", "shore", "the", "by", "sheer"};
+    char *ck = "abhirooop";
 
-    Node * head = NULL;
+    root = malloc(sizeof(Trie));
+    if ( !root )
+	return 1;
 
-    push(&head, 4);
-    push(&head, 3);
-    push(&head, 6);
-    push(&head, 9);
+    for (i = 0; i<26; i++ )
+    {
+	root->elm[i] = NULL;
+    }
+    root->end = 1; /* End of NULL string */
 
-    printf("%d\n", pop(&head) );
-    printf("%d\n", pop(&head) );
-    printf("%d\n", pop(&head) );
-    printf("%d\n", pop(&head) );
-    printf("%d\n", pop(&head) );
+    for ( i = 0; i<7; i++ )
+    {
+	trie_insert(root, keys[i]);
+    }
+    
+    if ( trie_search(root, keys[0]) )
+	printf("Key %s is present\n", keys[0] );
+    else
+	printf("Key %s is NOT present\n", keys[0] );
+
+    if ( trie_search(root, ck) )
+	printf("Key %s is present\n", ck );
+    else
+	printf("Key %s is NOT present\n", ck );
+
+    i = 0;
+    i = trie_del(root, keys[0], strlen(keys[0]), 0);
+    printf("%d\n", i);
+
+    if ( trie_search(root, keys[0]) )
+	printf("Key %s is present\n", keys[0] );
+    else
+	printf("Key %s is NOT present\n", keys[0] );
+
+   if ( trie_search(root, keys[6]) )
+	printf("Key %s is present\n", keys[6] );
+    else
+	printf("Key %s is NOT present\n", keys[6] );
 
     return 0;
 }
+
+
+
+
+   
+
+
+
+
