@@ -43,6 +43,67 @@ Node *seek_stack(Stack **top)
     return pt;
 }
 
+/* Queue Init function */
+void que_Init(Que **q)
+{
+    Que *tmp = NULL;
+
+    tmp = malloc(sizeof(Que));
+    if ( !tmp )
+	return;
+    tmp->head = NULL;
+    tmp->tail = NULL;
+
+    *q = tmp;
+}
+void que_destroy( Que **q)
+{
+    free(*q);
+}
+/* Enque operation on stack */
+void enque(Que **q, void *data)
+{
+    Que_node *tmp = NULL;
+
+    tmp = malloc(sizeof(Que_node));
+    if ( !tmp )
+	return;
+
+   tmp->next = NULL;
+   tmp->ptr = data;
+
+   if ( *q->tail == NULL ) {
+       *q->tail = tmp;
+       *q->head = tmp;
+       return;
+   }
+   *q->tail->next = tmp;
+   *q->tail = tmp;
+}
+
+/* Deque a node from Queue */
+void *deque(Que **q)
+{
+    Que_node *tmp = NULL;
+    unsigned long *pt = NULL;
+
+    if ( *q->head == NULL )
+	return NULL;
+
+    /* Last node in the queue */
+    if ( *q->head == *q->tail && *q->head != NULL ) {
+	tmp = *q->head;
+	*q->head = *q->tail = NULL;
+    }
+    else {
+	tmp = *q->head;
+	*q->head = *q->head->next;
+    }
+    pt = (unsigned long *) tmp->ptr;
+    free(tmp);
+    return (void *) pt;
+}
+
 Trie *trie_newNode(void)
 {
     Trie *tmp = NULL;

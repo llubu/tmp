@@ -1,8 +1,8 @@
 #ifndef _DS_H
 #define _DS_H
 
-typedef struct stack {
-    struct stack *next;
+typedef struct adt {
+    struct adt *next;
     void *ptr;
 } l_node;
 
@@ -18,8 +18,23 @@ typedef struct trie {
     int end;
 } Trie;
 
+typedef struct list {
+    struct list *next;
+    struct list *random;
+    int data;
+} Rlist;
+
 typedef l_node Stack;
-typedef l_node Que;
+
+typedef struct que_node {
+    struct que_node next;
+    void *ptr;
+} Que_node;
+
+typedef struct Que {
+    l_node *head;
+    l_node *tail;
+} Que;
 
 Stack *push(Stack **top, Node *node);
 Node *pop(Stack **top);
