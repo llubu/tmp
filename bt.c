@@ -2,6 +2,22 @@
 #include <stdlib.h>
 #include "ds.h"
 
+/* Returns Level of a given node in BST */
+int level(Node *root, Node *node, int lev)
+{
+    int tmp_level = 0;
+    if ( !root )
+	return 0;
+    if ( root == node )
+	return lev;
+
+    tmp_level = level(root->left, node, lev+1);
+    if ( tmp_level )
+	return tmp_level;
+    else
+	return level(root->right, node, lev+1);
+}
+
 Node *find_max(Node *root)
 {
     if ( !root->right )
