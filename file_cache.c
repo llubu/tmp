@@ -158,6 +158,7 @@ void file_cache_destroy(file_cache *cache)
 
 void file_cache_pin_files(file_cache *cache, const char **files, int num_files)
 {
+    printf("Entering PINING:\n");
     const char *fName = NULL;
     int i, j, nameLen, hit, freeIndex, ret;
     FILE *filePt;
@@ -179,12 +180,17 @@ void file_cache_pin_files(file_cache *cache, const char **files, int num_files)
 	    if ( 0 == strcmp(fName, cache->nodeHead[j].name) ) { /* Cache Hit */ 
 		cache->nodeHead[j].refCount++;			
 		hit = 1;
+		printf("CACHE HIT for :%s: RefCount:%d:\n", fName, cache->nodeHead[j].refCount);
 		break;
 	    }
 	}
 	if ( 0 == hit ) { /* Cache Miss */
-	    while ( cache->currentSize == cache->maxSize ) /* Cache is full, wait for a slot to open */
+	    printf("CACHE MISS:%d\n", cache->currentSize);
+	    while ( cache->currentSize == cache->maxSize ) /* Cache is full, wait for a slot to open */ {
+		printf("WAITING ...."); //ABHI
 		pthread_cond_wait(&slotcv, &pinLock);
+	    }
+	    printf("CACHE MISS-UNLOCK:%d\n", cache->currentSize);
 
 	    /* Get a free index in the file_cache */
 	    for ( freeIndex = 0; freeIndex < cache->maxSize; freeIndex++ ) {
@@ -218,6 +224,7 @@ void file_cache_pin_files(file_cache *cache, const char **files, int num_files)
 		fclose(filePt);
 		cache->nodeHead[freeIndex].refCount += 1;
 		cache->currentSize += 1;
+		printf("PINNING:%s:\n", cache->nodeHead[freeIndex].name); //ABHI
 	    }
 	    else { /* File not present. Create on Disk with 10 Kb '\0' */
 
@@ -233,6 +240,7 @@ void file_cache_pin_files(file_cache *cache, const char **files, int num_files)
 
 	}
     }
+    printf("Leaving PINNING:\n");
     pthread_mutex_unlock(&pinLock); /* release the lock before returning */
 }
 
@@ -255,6 +263,7 @@ void file_cache_pin_files(file_cache *cache, const char **files, int num_files)
 
 void file_cache_unpin_files(file_cache *cache, const char **files, int num_files)
 {
+    printf("Entering UNPINING:\n");
     const char *fName = NULL;
     int i, j, loc;
     FILE *filePt;
@@ -284,6 +293,7 @@ void file_cache_unpin_files(file_cache *cache, const char **files, int num_files
 			fwrite(cache->nodeHead[j].cache, 1, CACHE_SIZE, filePt);
 			fclose(filePt);
 		    }
+		    printf("UNPINNING:%s:\n", cache->nodeHead[j].name); //ABHI
 		    free(cache->nodeHead[j].cache);
 		    free(cache->nodeHead[j].name);
 		    memset(&(cache->nodeHead[j]), 0, sizeof(struct __node_cache));
@@ -301,6 +311,7 @@ void file_cache_unpin_files(file_cache *cache, const char **files, int num_files
 	    }
 	}
     }
+    printf("LEAVINF UNPIN:\n");
     pthread_mutex_unlock(&pinLock);
 }
 /* 
@@ -367,12 +378,39 @@ char *file_cache_mutable_file_data(file_cache *cache, const char *file)
     }
     return ret_val;
 }
+/**************************************************** TESTING ************************************/
+    struct payload {
+	struct file_cache *c;
+	const char **name;
+	int num;
+	int tid;
+    };
 
 
 
-void test_fc()
+void *test_fc(void *payload)
 {
+    sleep(2);
+    printf("ENTERING TEST_FC---------------------\n");
+    struct payload *pt = (struct payload *) payload;
+    printf("TID:%d:\n", pt->tid);
+    if ( pt->tid == 1) {
 
+	printf("Pinning- PID:%d:File-%s:\n", pt->tid, *pt->name);
+	sleep(5);
+    	pt->c->file_cache_pin_files(pt->c, pt->name, pt->num);
+    }
+    else if ( pt->tid == 0) {
+	printf("Pinning- PID:%d:File-%s:\n",pt->tid, *pt->name);
+    	pt->c->file_cache_pin_files(pt->c, pt->name, pt->num);
+    }
+    if ( pt->tid == 2) {
+
+	printf("UNPinning- PID:%d:File-%s:\n", pt->tid, *pt->name);
+	sleep(5);
+    	pt->c->file_cache_unpin_files(pt->c, pt->name, pt->num);
+    }
+ 
 }
 
 
@@ -380,55 +418,105 @@ int main()
 {
     const char *rPt;
     char *wPt;
+    const char *nm;
+    const char *nm1, *nm2;
     pthread_t threads[4];
-    int i;
+    pthread_attr_t attr;
+    int i, rc, t;
+    void *status;
 
     struct file_cache *ch = file_cache_construct(4);
     printf("0x%x\n", (unsigned int ) ch);
 
-    struct payload {
-	struct file_cache *c;
-	const char **name;
-	int num;
-    }payload;
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
 
     const char *fn [4];
-//    fn[0] = "gh.out";
+    nm = "gh.out";
     fn[0] = "bt.c";
     fn[1] = "ad.out";
     fn[2] = "check.out";
     fn[3] = "qw.out";
 
+    struct payload payload;
     payload.c = ch;
-    payload.name = &fn;
-    payload.num = 4;
+    payload.name = &nm;
+    payload.num = 1;
+    payload.tid = 0;
 
-    printf("%s:\n", payload.name[0]);
-    printf("%s:\n", payload.name[1]);
-    printf("%s:\n", payload.name[2]);
-
-    pthread_create(&threads[0], NULL, ch->file_cache_pin_files, (void *) &payload);
 
     printf("Max Size:%d: CurrentSize:%d\n", ch->maxSize, ch->currentSize);
-    printf("0x%x\n", (unsigned int) file_cache_construct(10) );
+//    printf("0x%x\n", (unsigned int) file_cache_construct(10) );
+ //   printf("Max Size:%d: CurrentSize:%d\n", ch->maxSize, ch->currentSize);
+    ch->file_cache_pin_files(ch, fn, 4);
     printf("Max Size:%d: CurrentSize:%d\n", ch->maxSize, ch->currentSize);
-    const char *nm = "ad.out";
-//    ch->file_cache_pin_files(ch, fn, 4);
-//    printf("Max Size:%d: CurrentSize:%d\n", ch->maxSize, ch->currentSize);
+
+    ch->file_cache_pin_files(ch, &fn[1], 1);
+    printf(" 2nd Pin Max Size:%d: CurrentSize:%d\n", ch->maxSize, ch->currentSize);
+
+    printf("Creating 1 thread:\n");
+
+    rc = pthread_create(&threads[0], &attr, test_fc, (void *) &payload);
+    if (rc)
+	printf("ERROR; return code from pthread_create() is %d\n", rc);
+
+    printf("Sleeping\n");
+    sleep(20);
+    struct payload payload1;
+    nm1 = "bt.c";
+    payload1.c = ch;
+    payload1.name = &nm1;
+    payload1.num = 1;
+    payload1.tid = 1;
+
+    printf("Creating 2nd thread:\n");
+
+    rc = pthread_create(&threads[1], &attr, test_fc, (void *) &payload1);
+    if (rc)
+	printf("ERROR; return code from pthread_create() is %d\n", rc);
+
+
+    printf("Sleeping-2\n");
+    sleep(20);
+    struct payload payload2;
+    nm2 = "qw.out";
+    payload2.c = ch;
+    payload2.name = &nm2;
+    payload2.num = 1;
+    payload2.tid = 2;
+
+    printf("Creating 3rd thread:\n");
+
+    rc = pthread_create(&threads[2], &attr, test_fc, (void *) &payload2);
+    if (rc)
+	printf("ERROR; return code from pthread_create() is %d\n", rc);
+
+
     for ( i = 0; i < 4; i++) {
 	rPt = file_cache_file_data(ch, fn[i]);
 	printf("%x\n", rPt);
     }
 
-    ch->file_cache_pin_files(ch, &fn[1], 1);
-    printf(" 2nd Pin Max Size:%d: CurrentSize:%d\n", ch->maxSize, ch->currentSize);
-
-
     wPt = ch->file_cache_mutable_file_data(ch, fn[3]);
     sprintf(wPt, "%s", "ABHIROOP DABRAL");
-    ch->file_cache_unpin_files(ch, &fn[3], 1);
-    printf("After Unpin-Max Size:%d: CurrentSize:%d\n", ch->maxSize, ch->currentSize);
+//    ch->file_cache_unpin_files(ch, &fn[3], 1);
+//    printf("After Unpin-Max Size:%d: CurrentSize:%d\n", ch->maxSize, ch->currentSize);
 
-//    pthread_exit(NULL);
+
+    pthread_attr_destroy(&attr);
+    for(t=0; t<3; t++) {
+	rc = pthread_join(threads[t], &status);
+	if (rc) {
+	    printf("ERROR; return code from pthread_join() is %d\n", rc);
+	    exit(-1);
+	}
+	printf("Main: completed join with thread %ld having a status of %ld\n",t,(long)status);
+    }
+
+    printf("Max Size:%d: CurrentSize:%d\n", ch->maxSize, ch->currentSize);
+    printf("Main: program completed. Exiting.\n");
+
+
+    pthread_exit(NULL);
     return 0;
 }
