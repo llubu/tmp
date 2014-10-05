@@ -128,9 +128,9 @@ void file_cache_destroy(file_cache *cache)
     free(cache);
 
     pthread_mutex_unlock(&metaLock);
-    pthread_mutex_destroy(&metaLock)
-    pthread_mutex_destroy(&pinLock)
-    pthread_cond_destroy(&slotcv)
+    pthread_mutex_destroy(&metaLock);
+    pthread_mutex_destroy(&pinLock);
+    pthread_cond_destroy(&slotcv);
 }
 
 /* @param:
@@ -243,10 +243,15 @@ void file_cache_pin_files(file_cache *cache, const char **files, int num_files)
  * @ret: void
  *
  * Notes:
- * This function UNpines the files if already pinned in the cache and release the memory in cache.
- * 
+ * This function UNpins the files if already pinned in the cache and release the memory in cache.
+ * if there is a cache hit i.e. file is there in cache, there are two scenarios:
+ *  1. refCount of the cache is 1:
+ *      - Flush the cache into the file if present on disk and release memory else dont do anything.
+ *  2. If refCount is greater then 1, just decrement the refCount by 1 and return.
+ *  After releasing the memory check if currentSize == maxSize, signal the process waiting for a free slot.
+ *  Decrement the currentSize before signaling.
+ *
  */
-
 
 void file_cache_unpin_files(file_cache *cache, const char **files, int num_files)
 {
@@ -283,8 +288,13 @@ void file_cache_unpin_files(file_cache *cache, const char **files, int num_files
 		    free(cache->nodeHead[j].name);
 		    memset(&(cache->nodeHead[j]), 0, sizeof(struct __node_cache));
 
-		    cache->currentSize -= 1;      /* Decrease the currentSize of file_cache */
-		    pthread_cond_signal(&slotcv); /* Signal to any thread blocking for a free slot */
+		    if ( cache->currentSize == cache->maxSize ) {
+			printf("SIZE ARE SAME:%d:%d:\n", cache->currentSize, cache->maxSize);
+			cache->currentSize -= 1;      /* Decrease the currentSize of file_cache */
+			pthread_cond_signal(&slotcv); /* Signal to any thread blocking for a free slot */
+		    }
+		    else
+			cache->currentSize -= 1;      /* Decrease the currentSize of file_cache */
 		}
 		else /* else just decrease the refcount */
 		    cache->nodeHead[j].refCount -= 1;
@@ -293,7 +303,16 @@ void file_cache_unpin_files(file_cache *cache, const char **files, int num_files
     }
     pthread_mutex_unlock(&pinLock);
 }
-
+/* 
+ * @param: *cache: pointer to file_cache structure (meta data).
+ *    *file: const char * pointer to file name to read from cache.
+ * @ret: const char * pointer to 10Kb in memory cache else NULL if not present.
+ *
+ * Notes:
+ * This functions returnes a const char pointer to the 10Kb cache to the client if present in cache.
+ * It is the responsibility of the client to synchronize the reads and writes to the file cache.
+ * 
+ */
 
 const char *file_cache_file_data(file_cache *cache, const char *file)
 {
@@ -314,6 +333,18 @@ const char *file_cache_file_data(file_cache *cache, const char *file)
     }
     return (const char *) ret_val;
 }
+
+/* 
+ * @param: *cache: pointer to file_cache structure (meta data).
+ *    *file: const char * pointer to file name to write to in cache.
+ * @ret: const char * pointer to 10Kb in memory cache else NULL if not present.
+ *
+ * Notes:
+ * This functions returnes a const char pointer to the 10Kb cache to the client if present in cache.
+ * It is the responsibility of the client to synchronize the reads and writes to the file cache.
+ * 
+ */
+
 
 
 char *file_cache_mutable_file_data(file_cache *cache, const char *file)
@@ -337,10 +368,67 @@ char *file_cache_mutable_file_data(file_cache *cache, const char *file)
     return ret_val;
 }
 
+
+
+void test_fc()
+{
+
+}
+
+
 int main()
 {
-    struct file_cache *ch = file_cache_construct(7);
-    const char *nm = "ABHI.out";
-    file_cache_pin_files(ch, &nm, 1);
+    const char *rPt;
+    char *wPt;
+    pthread_t threads[4];
+    int i;
+
+    struct file_cache *ch = file_cache_construct(4);
+    printf("0x%x\n", (unsigned int ) ch);
+
+    struct payload {
+	struct file_cache *c;
+	const char **name;
+	int num;
+    }payload;
+
+    const char *fn [4];
+//    fn[0] = "gh.out";
+    fn[0] = "bt.c";
+    fn[1] = "ad.out";
+    fn[2] = "check.out";
+    fn[3] = "qw.out";
+
+    payload.c = ch;
+    payload.name = &fn;
+    payload.num = 4;
+
+    printf("%s:\n", payload.name[0]);
+    printf("%s:\n", payload.name[1]);
+    printf("%s:\n", payload.name[2]);
+
+    pthread_create(&threads[0], NULL, ch->file_cache_pin_files, (void *) &payload);
+
+    printf("Max Size:%d: CurrentSize:%d\n", ch->maxSize, ch->currentSize);
+    printf("0x%x\n", (unsigned int) file_cache_construct(10) );
+    printf("Max Size:%d: CurrentSize:%d\n", ch->maxSize, ch->currentSize);
+    const char *nm = "ad.out";
+//    ch->file_cache_pin_files(ch, fn, 4);
+//    printf("Max Size:%d: CurrentSize:%d\n", ch->maxSize, ch->currentSize);
+    for ( i = 0; i < 4; i++) {
+	rPt = file_cache_file_data(ch, fn[i]);
+	printf("%x\n", rPt);
+    }
+
+    ch->file_cache_pin_files(ch, &fn[1], 1);
+    printf(" 2nd Pin Max Size:%d: CurrentSize:%d\n", ch->maxSize, ch->currentSize);
+
+
+    wPt = ch->file_cache_mutable_file_data(ch, fn[3]);
+    sprintf(wPt, "%s", "ABHIROOP DABRAL");
+    ch->file_cache_unpin_files(ch, &fn[3], 1);
+    printf("After Unpin-Max Size:%d: CurrentSize:%d\n", ch->maxSize, ch->currentSize);
+
+//    pthread_exit(NULL);
     return 0;
 }
