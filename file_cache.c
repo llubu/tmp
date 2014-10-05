@@ -41,7 +41,7 @@
 
 #define CACHE_SIZE 10240     /* 10 Kb = 10*1024 Bytes */
 
-pthread_mutex_t metaLock;    /* Mutex used in constructor to facilitate singelton instance */
+pthread_mutex_t metaLock = PTHREAD_MUTEX_INITIALIZER;    /* Mutex used in constructor to facilitate singelton instance */
 pthread_mutex_t pinLock;     /* Mutex used in pin & unpin to searially access file_cache DS */
 pthread_cond_t slotcv;	     /* Condition variable to signal if cache has empty slot */
 
@@ -57,7 +57,7 @@ file_cache *file_cache_construct(int max_cache_entries)
 {
     static file_cache *fileCachePt = NULL;
 
-    pthread_mutex_init (&metaLock, NULL);
+//    pthread_mutex_init (&metaLock, NULL);
     pthread_mutex_lock(&metaLock);
 
     if ( !fileCachePt ) {
@@ -83,10 +83,10 @@ file_cache *file_cache_construct(int max_cache_entries)
 	fileCachePt->file_cache_unpin_files = file_cache_unpin_files;
 	fileCachePt->file_cache_file_data = file_cache_file_data;
 	fileCachePt->file_cache_mutable_file_data = file_cache_mutable_file_data;
-    }
-    pthread_mutex_init(&pinLock, NULL);
-    pthread_cond_init (&slotcv, NULL);
 
+	pthread_mutex_init(&pinLock, NULL);
+	pthread_cond_init (&slotcv, NULL);
+    }
     pthread_mutex_unlock(&metaLock);
     return fileCachePt;
 }
@@ -128,6 +128,7 @@ void file_cache_destroy(file_cache *cache)
     free(cache);
 
     pthread_mutex_unlock(&metaLock);
+
     pthread_mutex_destroy(&metaLock);
     pthread_mutex_destroy(&pinLock);
     pthread_cond_destroy(&slotcv);
@@ -446,8 +447,8 @@ int main()
 
 
     printf("Max Size:%d: CurrentSize:%d\n", ch->maxSize, ch->currentSize);
-//    printf("0x%x\n", (unsigned int) file_cache_construct(10) );
- //   printf("Max Size:%d: CurrentSize:%d\n", ch->maxSize, ch->currentSize);
+    printf("0x%x\n", (unsigned int) file_cache_construct(10) );
+    printf("Max Size:%d: CurrentSize:%d\n", ch->maxSize, ch->currentSize);
     ch->file_cache_pin_files(ch, fn, 4);
     printf("Max Size:%d: CurrentSize:%d\n", ch->maxSize, ch->currentSize);
 
