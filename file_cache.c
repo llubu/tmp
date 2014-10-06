@@ -29,6 +29,14 @@
  *                         |char *cache         |---->[poniter to heap mem of size 10Kb]
  *			   |____________________|
  *
+ *
+ *
+ * The file_cache uses 2 mutex variables 'metaLock' & 'pinLock' and a condition variable 'slotcv' to synchronise
+ * file cache creation and the pin and unpinning of files in the file cache respectively.
+ * metaLock allows only one thread to enter the constructor and desctructor at a time, therby enforcing singelton pattern.
+ * pinLock synchronises the access to pin and unpin access to file cache, if there a no empty slot the thread will block on 
+ * slotcv condition variable which is signaled in unpin function whenever an empty slot opens up.
+ *
  */                            
 
 #include <stdio.h>
@@ -57,7 +65,6 @@ file_cache *file_cache_construct(int max_cache_entries)
 {
     static file_cache *fileCachePt = NULL;
 
-//    pthread_mutex_init (&metaLock, NULL);
     pthread_mutex_lock(&metaLock);
 
     if ( !fileCachePt ) {
@@ -126,6 +133,7 @@ void file_cache_destroy(file_cache *cache)
 
     /* Now free file_cache structure */
     free(cache);
+    cache = NULL;
 
     pthread_mutex_unlock(&metaLock);
 
@@ -159,7 +167,7 @@ void file_cache_destroy(file_cache *cache)
 
 void file_cache_pin_files(file_cache *cache, const char **files, int num_files)
 {
-    printf("Entering PINING:\n");
+    dbug_p("Entering PINING:\n");
     const char *fName = NULL;
     int i, j, nameLen, hit, freeIndex, ret;
     FILE *filePt;
@@ -181,17 +189,17 @@ void file_cache_pin_files(file_cache *cache, const char **files, int num_files)
 	    if ( 0 == strcmp(fName, cache->nodeHead[j].name) ) { /* Cache Hit */ 
 		cache->nodeHead[j].refCount++;			
 		hit = 1;
-		printf("CACHE HIT for :%s: RefCount:%d:\n", fName, cache->nodeHead[j].refCount);
+		dbug_p("CACHE HIT for :%s: RefCount:%d:\n", fName, cache->nodeHead[j].refCount);
 		break;
 	    }
 	}
 	if ( 0 == hit ) { /* Cache Miss */
-	    printf("CACHE MISS:%d\n", cache->currentSize);
+	    dbug_p("CACHE MISS:%d\n", cache->currentSize);
 	    while ( cache->currentSize == cache->maxSize ) /* Cache is full, wait for a slot to open */ {
-		printf("WAITING ...."); //ABHI
+		dbug_p("WAITING ...."); //ABHI
 		pthread_cond_wait(&slotcv, &pinLock);
 	    }
-	    printf("CACHE MISS-UNLOCK:%d\n", cache->currentSize);
+	    dbug_p("CACHE MISS-UNLOCK:%d\n", cache->currentSize);
 
 	    /* Get a free index in the file_cache */
 	    for ( freeIndex = 0; freeIndex < cache->maxSize; freeIndex++ ) {
@@ -225,7 +233,7 @@ void file_cache_pin_files(file_cache *cache, const char **files, int num_files)
 		fclose(filePt);
 		cache->nodeHead[freeIndex].refCount += 1;
 		cache->currentSize += 1;
-		printf("PINNING:%s:\n", cache->nodeHead[freeIndex].name); //ABHI
+		dbug_p("PINNING:%s:\n", cache->nodeHead[freeIndex].name); //ABHI
 	    }
 	    else { /* File not present. Create on Disk with 10 Kb '\0' */
 
@@ -236,12 +244,12 @@ void file_cache_pin_files(file_cache *cache, const char **files, int num_files)
 		}
 		fclose(filePt); 
 		ret = truncate(fName, CACHE_SIZE);
-		printf(" RET FROM TRUCN:%d\n", ret); // ABHI
+		dbug_p(" RET FROM TRUCN:%d\n", ret); // ABHI
 	    }
 
 	}
     }
-    printf("Leaving PINNING:\n");
+    dbug_p("Leaving PINNING:\n");
     pthread_mutex_unlock(&pinLock); /* release the lock before returning */
 }
 
@@ -264,7 +272,7 @@ void file_cache_pin_files(file_cache *cache, const char **files, int num_files)
 
 void file_cache_unpin_files(file_cache *cache, const char **files, int num_files)
 {
-    printf("Entering UNPINING:\n");
+    dbug_p("Entering UNPINING:\n");
     const char *fName = NULL;
     int i, j, loc;
     FILE *filePt;
@@ -294,13 +302,13 @@ void file_cache_unpin_files(file_cache *cache, const char **files, int num_files
 			fwrite(cache->nodeHead[j].cache, 1, CACHE_SIZE, filePt);
 			fclose(filePt);
 		    }
-		    printf("UNPINNING:%s:\n", cache->nodeHead[j].name); //ABHI
+		    dbug_p("UNPINNING:%s:\n", cache->nodeHead[j].name); //ABHI
 		    free(cache->nodeHead[j].cache);
 		    free(cache->nodeHead[j].name);
 		    memset(&(cache->nodeHead[j]), 0, sizeof(struct __node_cache));
 
 		    if ( cache->currentSize == cache->maxSize ) {
-			printf("SIZE ARE SAME:%d:%d:\n", cache->currentSize, cache->maxSize);
+			dbug_p("SIZE ARE SAME:%d:%d:\n", cache->currentSize, cache->maxSize);
 			cache->currentSize -= 1;      /* Decrease the currentSize of file_cache */
 			pthread_cond_signal(&slotcv); /* Signal to any thread blocking for a free slot */
 		    }
@@ -312,7 +320,7 @@ void file_cache_unpin_files(file_cache *cache, const char **files, int num_files
 	    }
 	}
     }
-    printf("LEAVINF UNPIN:\n");
+    dbug_p("LEAVINF UNPIN:\n");
     pthread_mutex_unlock(&pinLock);
 }
 /* 
@@ -356,9 +364,6 @@ const char *file_cache_file_data(file_cache *cache, const char *file)
  * It is the responsibility of the client to synchronize the reads and writes to the file cache.
  * 
  */
-
-
-
 char *file_cache_mutable_file_data(file_cache *cache, const char *file)
 {
     char *ret_val = NULL;
@@ -379,16 +384,26 @@ char *file_cache_mutable_file_data(file_cache *cache, const char *file)
     }
     return ret_val;
 }
+
+
+
+/* Below are some unit test cases (very basic) and some code I wrote to test the multithreaded behavior of file cache */
+/* To turn ON the debug printfs -dbug_p() either uncomment define DEBUG in file_cache.h or just compile with -DDEBUG flag */
+
 /**************************************************** TESTING ************************************/
-    struct payload {
-	struct file_cache *c;
-	const char **name;
-	int num;
-	int tid;
-    };
 
 
+struct payload {
+    struct file_cache *c;
+    const char **name;
+    int num;
+    int tid;
+};
 
+
+/* Used by pthreads to unload the arguments and call file_cache function
+ * Called from main().
+ */
 void *test_fc(void *payload)
 {
     sleep(2);
@@ -415,8 +430,124 @@ void *test_fc(void *payload)
 }
 
 
+/*
+ * Some unit test case for the file cache implementation.
+*/
+
+void test_case()
+{
+    struct file_cache *pt1 = NULL;
+    struct file_cache *pt2 = NULL;
+
+    const char *rPt;		/* Read pointer returned from */
+    char *wPt;                  /* Write pointer returned from */
+    const char *fileList;
+    int total = 7, passed = 0, maxcount = 0, currentcount = 0, i, flag = 0;
+    const char *fn [4];
+
+    fn[0] = "bt.c";
+    fn[1] = "ad.out";
+    fn[2] = "check.out";
+    fn[3] = "qw.out";
+
+
+    printf("Executing Some Basic Test Case.\n");
+
+    /* Test to check if only a singleton instance is returned 
+       from constructor even on multiple invocation */
+
+    pt1 = file_cache_construct(4);
+    pt2 = file_cache_construct(9);
+    if ( pt1 == pt2 ) {
+	++passed;
+	printf("Singleton test passed.\n");
+    }
+    else
+	printf("Singleton test failed.\n");
+    
+
+    /* Test to check if Pining of File Cache working */
+
+    maxcount = pt1->maxSize;
+    currentcount = pt1->currentSize;
+    if ( maxcount == 4 && currentcount == 0) {
+	++passed;
+	printf("File Cache initialaized to correct counts.\n");
+    }
+    else
+	printf("File Cache *NOT* initialaized to correct counts.%d:%d\n", maxcount, currentcount);
+
+
+    pt1->file_cache_pin_files(pt1, fn, 4);
+    maxcount = 0, currentcount = 0;  /* Foe this test the files in fn should be present */
+    maxcount = pt1->maxSize;
+    currentcount = pt1->currentSize;
+    if ( maxcount == 4 && currentcount == 4) {
+	++passed;
+	printf("File Cache PIN success.\n");
+    }
+    else
+	printf("File Cache PIN failure.\n");
+
+
+    pt1->file_cache_unpin_files(pt1, &fn[3], 1);
+    currentcount = pt1->currentSize;
+
+    /* Normal Unpin test case */
+    if ( currentcount == 3 ) {
+	++passed;
+	printf("Normal Unpin works fine.\n");
+    }
+    else
+	printf("Normal Unpin failed.\n");
+
+    /* Test to check pinnin of alreasy pinned file  */
+
+    pt1->file_cache_pin_files(pt1, &fn[1], 1);
+    currentcount = pt1->currentSize;
+    if ( currentcount == 3 ) {
+	++passed;
+	printf("Repin, already pinned file pass.\n");
+    }
+    else
+	printf("Repin, already pinned file FAILED.\n");
+
+    /* Testing Reading File Cache */
+    /* File no 3 is already UNpined so should 
+       not return valid pointer for that
+     */
+
+    printf("PASSED:%d:\n", passed);
+    for ( i = 0; i < 4; i++) {
+        rPt = pt1->file_cache_file_data(pt1, fn[i]);
+	if ( i == 3 ) {
+	    if ( rPt == NULL ) {
+	    ++passed;
+	    printf("Normal read test(-reading unpinned file) PASS.\n");
+	    }
+	    else
+		printf("Normal read test(-reading unpinned file) FAIL.\n");
+	}
+	else if ( rPt != NULL ) {
+	    printf("Normal read test PASS. File no:%d:\n", i);
+	}
+	else {
+	    printf("Normal read test FAIL. File No:%d:\n", i);
+	    flag = 1;
+	}
+    }
+    if ( !flag )
+	++passed;
+
+
+    printf("Total Test Case executed: %d: Passed: %d: Failed: %d\n",
+	    total, passed, (total -passed) );
+
+}
+/*
 int main()
 {
+    
     const char *rPt;
     char *wPt;
     const char *nm;
@@ -494,8 +625,8 @@ int main()
 
 
     for ( i = 0; i < 4; i++) {
-	rPt = file_cache_file_data(ch, fn[i]);
-	printf("%x\n", rPt);
+	rPt = ch->file_cache_file_data(ch, fn[i]);
+	printf("%#x\n", (unsigned int) rPt);
     }
 
     wPt = ch->file_cache_mutable_file_data(ch, fn[3]);
@@ -511,13 +642,19 @@ int main()
 	    printf("ERROR; return code from pthread_join() is %d\n", rc);
 	    exit(-1);
 	}
-	printf("Main: completed join with thread %ld having a status of %ld\n",t,(long)status);
+	printf("Main: completed join with thread %d having a status of %ld\n",t,(long)status);
     }
 
     printf("Max Size:%d: CurrentSize:%d\n", ch->maxSize, ch->currentSize);
-    printf("Main: program completed. Exiting.\n");
+    printf("Destroying file cache before exit.\n");
 
+    ch->file_cache_destroy(ch);
 
-    pthread_exit(NULL);
+//    printf("File Cache Should give seg fault on access:\n");
+//    printf("MAX COUNT:%s:\n", ch->nodeHead[2].name);
+
+//    test_case();
+//    pthread_exit(NULL);
     return 0;
-}
+} 
+*/

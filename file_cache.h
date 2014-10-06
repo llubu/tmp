@@ -39,6 +39,7 @@ typedef struct file_cache file_cache;
 
 /*-----------------------------Changes Start from Here ------------------------ */
 
+//#define DEBUG
 /* Structure definition for struct file_cache. This acts a meta data for the file cache
  * and has all the function pointers and pointer to actual file cache nodes.
  * All the declarations have inline comments describing there use and role in the file cache.
@@ -75,6 +76,20 @@ struct __node_cache {
     char *name;         /* Name of the file as specified in Pin API call assuming to be a absolute path */
     char *cache;        /* Pointer to 10Kb char buffer. */
 }; 
+
+/* Simple definition of a variadic debug printf function for debugging purpose */
+# ifndef DEBUG			
+# define DEBUG_T 0
+
+#else
+# define DEBUG_T 1 	
+#endif
+
+/******************* MACRO declaration the debug print: **********************************/
+
+#define dbug_p(fmt,...) \
+	do { if(DEBUG_T) fprintf(stderr, "%s:%d:%s():" fmt,__FILE__,\
+				__LINE__,__func__,##__VA_ARGS__); } while(0)
 
 /*********************************** END HERE ****************************************************************/
 
