@@ -46,9 +46,14 @@ typedef struct file_cache file_cache;
 */
 
 struct file_cache {
-    int maxSize;		  /* Max size of file_cache passed to constructor */
-    int currentSize;              /* Current Size of the file_cache */
+    int maxSize;		   /* Max size of file_cache passed to constructor */
+    int currentSize;               /* Current Size of the file_cache */
     struct __node_cache *nodeHead; /* Pointer to the head of list of cache nodes */
+    struct file_cache **selfRef;   /* This is used to set the static pt in constructor to NULL. */
+   /* As we cant change the function signature of the constructor and otherwise if once destroy is called,
+      no new instances of file cache can be initialized until a new process calls the constructor because 
+      static variable in constructor is still poninting to same heap memory initialized in previous call to constuctor.
+      So this is set to NULL before freeing the memory in destroy call */
 
     /* function pointers */
     void (*file_cache_destroy)(file_cache *cache);

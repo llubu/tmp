@@ -37,6 +37,8 @@
  * pinLock synchronises the access to pin and unpin access to file cache, if there a no empty slot the thread will block on 
  * slotcv condition variable which is signaled in unpin function whenever an empty slot opens up.
  *
+ * Developed & tested on Ubuntu 32bit with gcc 4.4.3
+ *
  */                            
 
 #include <stdio.h>
@@ -50,8 +52,8 @@
 #define CACHE_SIZE 10240     /* 10 Kb = 10*1024 Bytes */
 
 pthread_mutex_t metaLock = PTHREAD_MUTEX_INITIALIZER;    /* Mutex used in constructor to facilitate singelton instance */
-pthread_mutex_t pinLock;     /* Mutex used in pin & unpin to searially access file_cache DS */
-pthread_cond_t slotcv;	     /* Condition variable to signal if cache has empty slot */
+pthread_mutex_t pinLock;  				 /* Mutex used in pin & unpin to searially access file_cache DS */
+pthread_cond_t slotcv;	     			         /* Condition variable to signal if cache has empty slot */
 
 /* @param: int max_cache_entries: Maximum entries in the file cache.
  * @ret: file_cache* poniter to file_cache structure. 
@@ -75,6 +77,7 @@ file_cache *file_cache_construct(int max_cache_entries)
 	memset(fileCachePt, 0, sizeof(struct file_cache));
 	fileCachePt->maxSize = max_cache_entries;
 	fileCachePt->currentSize = 0;
+	fileCachePt->selfRef = &fileCachePt;
 
 	fileCachePt->nodeHead = malloc(max_cache_entries *(sizeof(struct __node_cache)));
 	if ( !fileCachePt->nodeHead ) {
@@ -111,6 +114,8 @@ file_cache *file_cache_construct(int max_cache_entries)
 void file_cache_destroy(file_cache *cache)
 {
     int size, i;
+    FILE *filePt;
+
     if ( !cache )
 	return;
 
@@ -120,6 +125,16 @@ void file_cache_destroy(file_cache *cache)
     i = 0;
 
     while ( i < size ) {  /* Free the cache and name in each nodeCache */
+	if ( cache->nodeHead[i].dirty ) { /* Flush back to Disk */ 
+	    filePt = fopen(cache->nodeHead[i].name, "w");
+	    if ( !filePt ) {  /* Can't Open file to write to,error out without modifying any metadata */
+		pthread_mutex_unlock(&metaLock);
+		return;
+	    }
+	    fwrite(cache->nodeHead[i].cache, 1, CACHE_SIZE, filePt);
+	    fclose(filePt);
+	}
+
 	free(cache->nodeHead[i].name);
 	free(cache->nodeHead[i].cache);
 	i++;
@@ -128,16 +143,17 @@ void file_cache_destroy(file_cache *cache)
     /* Now free nodeCache itself */
     free(cache->nodeHead);
 
+    /* Setting the static pointer in construct call to NULL */
+    *(cache->selfRef) = NULL;
+
     /* Just to make sure that all dangling refrences will seg fault after this */
     memset(cache, 0, sizeof(struct file_cache));
 
     /* Now free file_cache structure */
     free(cache);
-    cache = NULL;
 
     pthread_mutex_unlock(&metaLock);
 
-    pthread_mutex_destroy(&metaLock);
     pthread_mutex_destroy(&pinLock);
     pthread_cond_destroy(&slotcv);
 }
@@ -196,7 +212,7 @@ void file_cache_pin_files(file_cache *cache, const char **files, int num_files)
 	if ( 0 == hit ) { /* Cache Miss */
 	    dbug_p("CACHE MISS:%d\n", cache->currentSize);
 	    while ( cache->currentSize == cache->maxSize ) /* Cache is full, wait for a slot to open */ {
-		dbug_p("WAITING ...."); //ABHI
+		dbug_p("WAITING ....\n"); //ABHI
 		pthread_cond_wait(&slotcv, &pinLock);
 	    }
 	    dbug_p("CACHE MISS-UNLOCK:%d\n", cache->currentSize);
@@ -544,6 +560,7 @@ void test_case()
 	    total, passed, (total -passed) );
 
 }
+
 /*
 int main()
 {
@@ -629,7 +646,7 @@ int main()
 	printf("%#x\n", (unsigned int) rPt);
     }
 
-    wPt = ch->file_cache_mutable_file_data(ch, fn[3]);
+    wPt = ch->file_cache_mutable_file_data(ch, fn[0]);
     sprintf(wPt, "%s", "ABHIROOP DABRAL");
 //    ch->file_cache_unpin_files(ch, &fn[3], 1);
 //    printf("After Unpin-Max Size:%d: CurrentSize:%d\n", ch->maxSize, ch->currentSize);
@@ -653,7 +670,7 @@ int main()
 //    printf("File Cache Should give seg fault on access:\n");
 //    printf("MAX COUNT:%s:\n", ch->nodeHead[2].name);
 
-//    test_case();
+    test_case();
 //    pthread_exit(NULL);
     return 0;
 } 
