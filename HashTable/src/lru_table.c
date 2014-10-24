@@ -3,13 +3,15 @@
 #include <string.h>
 #include <lru_table.h>
 
-
+static unsigned int collisionCount = 0;
+/*
 uint32_t hash_Function (LruTable *table, int key);
 void update_LRU (LruTable *table, struct __lru *pos, int value);
 void add_LRU_node (LruTable *table, struct __node *node, int value);
 void del_LRU_node (LruTable *table, struct __lru *pos);
 struct __node *find_collision(struct __tableEntry *tentry, int key);
 struct __node *add_new_chainEntry(LruTable *table, struct __tableEntry *tentry, int key, int value);
+*/
 /* 
  * @param: hash_key_size: Number of bits to be used from Hash Value
  * @return: LruTable *:   Pointer to Hash Table just initialized
@@ -39,7 +41,7 @@ LruTable* LruTable_Create (int hash_key_size)
 	free(table);
 	return NULL;
     }
-    memset(table->htArray, 0, sizeof(struct __node) * table->maxSize);
+    memset(table->htArray, 0, sizeof(struct __tableEntry) * table->maxSize);
 
     table->lruList = malloc(sizeof(struct __LruMeta));
     if ( !table->lruList ) {
@@ -65,17 +67,27 @@ LruTable* LruTable_Create (int hash_key_size)
  */
 void LruTable_Destroy (LruTable *table)
 {
+    int i = 0;
     struct __lru *current = NULL;
     struct __lru *tmp = NULL;
+    struct __node *chainPt = NULL, *freeChain = NULL;
 
     if ( !table )
 	return;
+
+    for ( i = 0; i < table->maxSize; i++ ) {
+	    chainPt = table->htArray[i].chain;
+	    while ( chainPt ) {
+		freeChain = chainPt->next;
+		free(chainPt);
+		chainPt = freeChain;
+	    }
+    }
 
     free(table->htArray);
 
     if ( table->lruList ) {
 	current = table->lruList->head;
-
 	while ( current ) {
 	    tmp = current->next;
 	    free(current);
@@ -86,6 +98,7 @@ void LruTable_Destroy (LruTable *table)
     free(table->lruList);
     free(table);
     memset(table, 0, sizeof(LruTable));
+    printf(" COLLISIONS IN THIS RUN: %u:\n", collisionCount);
 }
 
 
@@ -97,11 +110,13 @@ void LruTable_Insert (LruTable *table, int key, int value)
     uint32_t index;
     struct __node *collisionPos = NULL, *newNode = NULL;
 
-    if ( !table || key < 1 || key > LRU_TABLE_HASH_KEY_SIZE_MAX ) 
+//    printf("%s:%d\n",__func__, __LINE__);
+    if ( !table ) 
 	return;
 
     index = hash_Function(table, key);
 
+//    printf("%s:%d\n",__func__, __LINE__);
     if ( table->htArray[index].chain ) { /* Atleast one Entry present */
 	collisionPos = find_collision(&(table->htArray[index]), key);
 
@@ -109,11 +124,15 @@ void LruTable_Insert (LruTable *table, int key, int value)
 	    collisionPos->data = value;
 	    update_LRU(table, collisionPos->lruPos, value);
 	}
+	if ( !collisionPos )
+	    ++collisionCount;
     }
 
+  //  printf("%s:%d\n",__func__, __LINE__);
     /* Key Miss or add a new node in chain for the collision  */
     if ( !collisionPos || !table->htArray[index].chain ) {
 	newNode = add_new_chainEntry(table, &(table->htArray[index]), key, value);
+ //   	printf("%s:%d\n",__func__, __LINE__);
 	if ( !newNode )
 	    return;
 	add_LRU_node(table, newNode, value);
@@ -129,8 +148,7 @@ bool LruTable_Lookup (const LruTable *table, int key, int *out_value)
     uint32_t index;
     struct __node *position = NULL;
 
-    if ( !table || !out_value || key < 1 
-	    || key > LRU_TABLE_HASH_KEY_SIZE_MAX )
+    if ( !table || !out_value )
 	return false;
 
     index = hash_Function((LruTable *) table, key);
@@ -152,24 +170,34 @@ void LruTable_Remove (LruTable *table, int key)
     uint32_t index;
     struct __node *position;
 
-    if ( !table || key < 1 || key > LRU_TABLE_HASH_KEY_SIZE_MAX ) 
+    if ( !table ) 
 	return;
 
     index = hash_Function(table, key);
 
     if ( table->htArray[index].chain ) {
+        printf("%s:%d\n",__func__, __LINE__);
 	position = find_collision(&(table->htArray[index]), key);
-	if ( !position )
+        printf("%s:%d\n",__func__, __LINE__);
+	if ( !position ) {
+            printf("%s:%d\n",__func__, __LINE__);
 	    return;
+	}
 
+        printf("%s:%d\n",__func__, __LINE__);
 	del_LRU_node(table, position->lruPos);
+        printf("%s:%d\n",__func__, __LINE__);
 	if ( position == table->htArray[index].chain ) { /* Node is at head of chain */
 	    table->htArray[index].chain = position->next;
+            printf("%s:%d:%x:\n",__func__, __LINE__, position);
 	    if ( position->next )
 		position->next->prev = NULL;
+            printf("%s:%d\n",__func__, __LINE__);
 	}
 	else { /* Not at head */
+            printf("%s:%d:%x: %x:\n",__func__, __LINE__, position, table->htArray[index].chain);
 	    position->prev->next = position->next;
+            printf("%s:%d\n",__func__, __LINE__);
 	    if ( position->next )
 		position->next->prev = position->prev;
 	}
@@ -189,7 +217,9 @@ bool LruTable_RemoveOldest (LruTable *table, int *out_value)
     if ( table->lruList ) {
 	*out_value = table->lruList->head->data;
 	position = table->lruList->head->backPt;
+        printf("%s:%d\n",__func__, __LINE__);
 	LruTable_Remove(table, position->key);  /* Remove entry in HT & LRU list */
+        printf("%s:%d\n",__func__, __LINE__);
 	return true;
     }
     return false;

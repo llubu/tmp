@@ -13,6 +13,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+
+
 enum {
     LRU_TABLE_HASH_KEY_SIZE_MAX = 20,
 };
@@ -100,5 +102,14 @@ void LruTable_Remove (LruTable *table, int key);
  * Returns: false for empty table, true otherwise
  */
 bool LruTable_RemoveOldest (LruTable *table, int *out_value);
+
+uint32_t hash_Function (LruTable *table, int key);
+void update_LRU (LruTable *table, struct __lru *pos, int value);
+void add_LRU_node (LruTable *table, struct __node *node, int value);
+void del_LRU_node (LruTable *table, struct __lru *pos);
+struct __node *find_collision(struct __tableEntry *tentry, int key);
+struct __node *add_new_chainEntry(LruTable *table, struct __tableEntry *tentry, int key, int value);
+
+
 
 #endif // LRU_TABLE__LRU_TABLE_H
