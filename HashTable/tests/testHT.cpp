@@ -1,5 +1,7 @@
 #include "CppUTest/TestHarness.h"
 #include <iostream>
+#include <ctime>
+
 extern "C"
 {
     #include <lru_table.h>
@@ -22,7 +24,7 @@ TEST_GROUP(HashTable)
     }
 };
 
-IGNORE_TEST(HashTable, Test_LruTable_Create)
+TEST(HashTable, Test_LruTable_Create)
 {
     int i;
 
@@ -59,7 +61,7 @@ IGNORE_TEST(HashTable, Test_LRUTable_Destroy)
 }
 
 
-IGNORE_TEST(HashTable, Test_LruTable_Insert)
+TEST(HashTable, Test_LruTable_Insert)
 {
     int i = 0;
     uint32_t hash1, hash2, hash3;
@@ -164,7 +166,7 @@ IGNORE_TEST(HashTable, Test_LruTable_Insert)
 
 
 
-IGNORE_TEST(HashTable, Test_LruTable_Lookup)
+TEST(HashTable, Test_LruTable_Lookup)
 {
     int key1 = 971, value1 = 45;
     int key2 = 71, value2 = 97;
@@ -219,7 +221,7 @@ IGNORE_TEST(HashTable, Test_LruTable_Lookup)
 
 
 
-IGNORE_TEST(HashTable, Test_LruTable_Remove)
+TEST(HashTable, Test_LruTable_Remove)
 {
     int key1 = 971, value1 = 45;
     int key2 = 71, value2 = 97;
@@ -286,6 +288,8 @@ TEST(HashTable, Test_LruTable_RemoveOldest)
     int key2 = 71, value2 = 97;
     int key3 = 12, value3 = 33;
     int res1, res2, res3;
+    unsigned int lruLen = 0;
+    struct __lru *cur = NULL;
 
     /* Insert 3 key-value pairs in Hash table */
     LruTable_Insert(table, key1, value1);
@@ -334,22 +338,10 @@ TEST(HashTable, Test_LruTable_RemoveOldest)
     if ( LruTable_Lookup(table, key2, &res1) ) {
 	FAIL(" LRU_Remove failed for an already inserted key value pair, pair is still present in HT!");
     }
-    std::cout << "Size of HT: " << i << " "<<table->currentSize << std::endl;
+//    std::cout << "Size of HT: " << i << " "<<table->currentSize << std::endl;
     
 
-    if ( !LruTable_RemoveOldest(table, &res1) ) {
-	FAIL(" Could not find a LRU entry in aleady setup HT!");
-    }
-    else if ( res1 != 211 ){ /* above loop touches key1 917 again making key 2 as LRU */
-	FAIL(" Returned Incorrecct LRU Value from HT --abhi!");
-    }
-
-    if ( LruTable_Lookup(table, 200, &res1) ) {
-	FAIL(" LRU_Remove failed for an already inserted key value pair, pair is still present in HT!");
-    }
- 
-
-    for ( i = 211; i<900 ; i++) {
+    for ( i = 210; i<900 ; i++) {
 //	std::cout << "INDEX I : " << i;
 	if ( !LruTable_RemoveOldest(table, &res1) ) {
 	    FAIL(" Could not find a LRU entry in aleady setup HT!");
@@ -362,39 +354,68 @@ TEST(HashTable, Test_LruTable_RemoveOldest)
 	if ( LruTable_Lookup(table, i, &res1) ) {
 	    FAIL(" LRU_Remove failed for an already inserted key value pair, pair is still present in HT!");
         }
-	std::cout << "COUNT: " << i;
+//	std::cout << "COUNT: " << i;
     }
 
-/*
+
     if ( LruTable_RemoveOldest(NULL, &res1) )
 	FAIL(" LRU_Remove do not check for validity of LruTable pointer!");
 
     if ( LruTable_RemoveOldest(table, NULL) )
 	FAIL(" LRU_Remove do not check for validity of out_value pointer!");
+    
+    cur = table->lruList->head;
+    while ( cur ) {
+	++lruLen;
+	cur = cur->next;
+    }
+//    std::cout << " COLLISION : " << colli << " " << lruLen << std::endl;
+    if ( lruLen != 900 || table->currentSize != 900 )
+	FAIL(" Incorrect Len of LRU list after removing 900 oldest. Should be 900 now!");
+}
 
+
+
+TEST(HashTable, Test_HT_Collosion)
+{
+    
     struct __node *current = NULL, *tmp;
-    unsigned int colli = 0, lruLen = 0;
-    int step = 0;
+    struct __lru *cur = NULL;
+    uint64_t colli = 0, start = 0, lruLen = 0;
+    int step = 0, i;
+
+    srand ( time(NULL) );
+    start = rand();
+    if ( table->currentSize != 0 )
+	FAIL(" Incorrect current Size. Should be 0 now!!. ");
+
+    for ( i = 0; i < (table->maxSize); i++) {
+	LruTable_Insert(table, start+i, start+i+1);
+    }
+    std::cout << table->maxSize << " " << table->currentSize << " " << maxSize << std::endl;
+    
+    if ( table->currentSize != (table->maxSize) ) {
+	std::cout << table->maxSize << " " << table->currentSize << " " << maxSize << std::endl;
+	FAIL(" Incorrect current Size. Should be maxSize now!!. ");
+    }
+
+
     for ( i = 0; i < maxSize; i++) {
 	current = table->htArray[i].chain;
 	step = 0;
 
 	while ( current ) {
 	    ++step;
-	    if ( step > 1 )
+	    if ( step > 1 )	/* If current chain has more then 1 element => collision */
 		colli++;
 	    current = current->next;
 	}
     }
 
-    struct __lru *cur = table->lruList->head;
+    cur = table->lruList->head;
     while ( cur ) {
 	++lruLen;
 	cur = cur->next;
     }
-
-    std::cout << " COLLISION : " << colli << " " << lruLen << std::endl;
-
-*/
-
+    std::cout << " COLLISION : " << colli << " " << lruLen << " " << " Collision % = " << (colli*100)/lruLen << std::endl;
 }

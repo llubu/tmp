@@ -98,7 +98,7 @@ void LruTable_Destroy (LruTable *table)
     free(table->lruList);
     free(table);
     memset(table, 0, sizeof(LruTable));
-    printf(" COLLISIONS IN THIS RUN: %u:\n", collisionCount);
+//    printf(" COLLISIONS IN THIS RUN: %u:\n", collisionCount);
 }
 
 
@@ -176,28 +176,28 @@ void LruTable_Remove (LruTable *table, int key)
     index = hash_Function(table, key);
 
     if ( table->htArray[index].chain ) {
-        printf("%s:%d\n",__func__, __LINE__);
+//        printf("%s:%d\n",__func__, __LINE__);
 	position = find_collision(&(table->htArray[index]), key);
-        printf("%s:%d\n",__func__, __LINE__);
+//        printf("%s:%d\n",__func__, __LINE__);
 	if ( !position ) {
-            printf("%s:%d\n",__func__, __LINE__);
+//            printf("%s:%d\n",__func__, __LINE__);
 	    return;
 	}
 
-        printf("%s:%d\n",__func__, __LINE__);
+//        printf("%s:%d\n",__func__, __LINE__);
 	del_LRU_node(table, position->lruPos);
-        printf("%s:%d\n",__func__, __LINE__);
+//        printf("%s:%d\n",__func__, __LINE__);
 	if ( position == table->htArray[index].chain ) { /* Node is at head of chain */
 	    table->htArray[index].chain = position->next;
-            printf("%s:%d:%x:\n",__func__, __LINE__, position);
+//            printf("%s:%d:%x:\n",__func__, __LINE__, position);
 	    if ( position->next )
 		position->next->prev = NULL;
-            printf("%s:%d\n",__func__, __LINE__);
+ //           printf("%s:%d\n",__func__, __LINE__);
 	}
 	else { /* Not at head */
-            printf("%s:%d:%x: %x:\n",__func__, __LINE__, position, table->htArray[index].chain);
+//            printf("%s:%d:%x: %x:\n",__func__, __LINE__, position, table->htArray[index].chain);
 	    position->prev->next = position->next;
-            printf("%s:%d\n",__func__, __LINE__);
+//            printf("%s:%d\n",__func__, __LINE__);
 	    if ( position->next )
 		position->next->prev = position->prev;
 	}
@@ -217,9 +217,9 @@ bool LruTable_RemoveOldest (LruTable *table, int *out_value)
     if ( table->lruList ) {
 	*out_value = table->lruList->head->data;
 	position = table->lruList->head->backPt;
-        printf("%s:%d\n",__func__, __LINE__);
+//        printf("%s:%d\n",__func__, __LINE__);
 	LruTable_Remove(table, position->key);  /* Remove entry in HT & LRU list */
-        printf("%s:%d\n",__func__, __LINE__);
+//        printf("%s:%d\n",__func__, __LINE__);
 	return true;
     }
     return false;
@@ -389,6 +389,7 @@ struct __node *add_new_chainEntry(LruTable *table, struct __tableEntry *tentry, 
     newNode->data = value;
     newNode->key = key;
     newNode->prev = NULL;
+    newNode->next = NULL;
 
     /* lruPos pointer is initialized in add_LRU_node()*/
     newNode->lruPos = NULL; /* till that call make it NULL */
@@ -398,6 +399,7 @@ struct __node *add_new_chainEntry(LruTable *table, struct __tableEntry *tentry, 
     }
     else { /* Add at the head */
 	newNode->next = tentry->chain;
+	tentry->chain->prev = newNode;
 	tentry->chain = newNode;
     }
     return newNode;
