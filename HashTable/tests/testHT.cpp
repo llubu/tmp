@@ -376,13 +376,13 @@ TEST(HashTable, Test_LruTable_RemoveOldest)
 
 
 
-TEST(HashTable, Test_HT_Collosion)
+TEST(HashTable, Test_HT_Collosion_Performance)
 {
     
     struct __node *current = NULL, *tmp;
     struct __lru *cur = NULL;
-    uint64_t colli = 0, start = 0, lruLen = 0;
-    int step = 0, i;
+    uint64_t colli = 0, start = 0, lruLen = 0, step = 0, maxchain = 0;
+    int i;
 
     srand ( time(NULL) );
     start = rand();
@@ -399,7 +399,7 @@ TEST(HashTable, Test_HT_Collosion)
 	FAIL(" Incorrect current Size. Should be maxSize now!!. ");
     }
 
-
+    colli = 0;
     for ( i = 0; i < maxSize; i++) {
 	current = table->htArray[i].chain;
 	step = 0;
@@ -410,6 +410,8 @@ TEST(HashTable, Test_HT_Collosion)
 		colli++;
 	    current = current->next;
 	}
+	if ( step > maxchain )
+	    maxchain = step;
     }
 
     cur = table->lruList->head;
@@ -417,5 +419,5 @@ TEST(HashTable, Test_HT_Collosion)
 	++lruLen;
 	cur = cur->next;
     }
-    std::cout << " COLLISION : " << colli << " " << lruLen << " " << " Collision % = " << (colli*100)/lruLen << std::endl;
+    std::cout << " COLLISION : " << colli << " " << lruLen << " " << " Collision % = " << (colli*100)/lruLen << " MAX CHAIN: " << maxchain << std::endl;
 }
