@@ -46,16 +46,18 @@ struct __node {
 
 /* LRU List Meta Data */
 struct __LruMeta{
-    struct __lru *head;
-    struct __lru *tail;
+    struct __lru *head;		/* Head pointer to LRU list*/
+    struct __lru *tail;         /* Tail pointer to LRU list */
 };
 
-/* Doubly Linked List to maintain LRU state. */
+/* Doubly Linked List to maintain LRU state.
+   Actual node of the LRU list
+ */
 struct __lru {
     int data;
     struct __lru *prev;
     struct __lru *next;
-    struct __node *backPt;
+    struct __node *backPt;	/* Pointer to the Node in the HT chain */
 };
 
 /*

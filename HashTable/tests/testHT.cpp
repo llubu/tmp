@@ -24,6 +24,12 @@ TEST_GROUP(HashTable)
     }
 };
 
+/*
+ *  This is suit of test , check for the validity of
+ *  the function LruTable_Create().
+ *  
+ */
+
 TEST(HashTable, Test_LruTable_Create)
 {
     int i;
@@ -55,12 +61,12 @@ TEST(HashTable, Test_LruTable_Create)
 	FAIL(" Constructor failed to Initialize LRU list Head/Tail to NULL!");
 }
 
-IGNORE_TEST(HashTable, Test_LRUTable_Destroy)
-{
-//    FAIL(" How to check the destructor!");
-}
 
-
+/*
+ * This test case suit test the validity of the Insert function
+ * of the hash Table.
+ *
+ */
 TEST(HashTable, Test_LruTable_Insert)
 {
     int i = 0;
@@ -101,7 +107,8 @@ TEST(HashTable, Test_LruTable_Insert)
     		    FAIL(" Insert to HT not correct Incorrect Key Value Pair-1!");
 		}
 	        pt1 = current;
-//		std::cout << "KEY VAL-1: " << current->key << " " << current->data << " " << std::hex << current << " "<<pt1 <<std::endl;
+//		std::cout << "KEY VAL-1: " << current->key << " " << current->data 
+//		<< " " << std::hex << current << " "<<pt1 <<std::endl;
 	    }
 	    if ( current->key == key2 ) {
 		if ( current->data != value2 ) {
@@ -164,7 +171,11 @@ TEST(HashTable, Test_LruTable_Insert)
     }
 }
 
-
+/*
+ * this test check for the validity of the 
+ * Lookup function of the Hash Table.
+ *
+ */
 
 TEST(HashTable, Test_LruTable_Lookup)
 {
@@ -219,7 +230,10 @@ TEST(HashTable, Test_LruTable_Lookup)
 
 }
 
-
+/*
+ * This test check for the validity of the 
+ * HT remove function.
+ */
 
 TEST(HashTable, Test_LruTable_Remove)
 {
@@ -279,7 +293,11 @@ TEST(HashTable, Test_LruTable_Remove)
  
 }
 
-
+/*
+ * this test check for the validity 
+ * of the RemoveOldest entry in the HT.
+ *
+ */
 
 TEST(HashTable, Test_LruTable_RemoveOldest)
 {
@@ -309,15 +327,16 @@ TEST(HashTable, Test_LruTable_RemoveOldest)
 	FAIL(" LRU_Remove failed for an already inserted key value pair, pair is still present in HT!");
     }
 
-    /* Insert Key1-value1 pair again */
+    /* Insert Key1-value1 pair again */ 
     LruTable_Insert(table, key1, value1);
+
     /* Right Now key-val 2 is LRU - lookup it, now key-value 3 should be LRU */
     LruTable_Lookup(table, key2, &res1);
 
     if ( !LruTable_RemoveOldest(table, &res1) ) {
 	FAIL(" Could not find a LRU entry in aleady setup HT!");
     }
-    else if ( res1 != 33 ){
+    else if ( res1 != value3 ){
 	FAIL(" Returned Incorrecct LRU Value from HT!");
     }
 
@@ -325,36 +344,38 @@ TEST(HashTable, Test_LruTable_RemoveOldest)
 	FAIL(" LRU_Remove failed for an already inserted key value pair, pair is still present in HT!");
     }
 
+    /* Now insert lots of entries in Hash Table */
     for ( i = 210; i< 1800; i++) 
 	LruTable_Insert(table, i, i+1);
 
+    /* At this point key-val2 should be LRU entry */
     if ( !LruTable_RemoveOldest(table, &res1) ) {
 	FAIL(" Could not find a LRU entry in aleady setup HT!");
     }
-    else if ( res1 != 97 ){ /* above loop touches key1 917 again making key 2 as LRU */
+    else if ( res1 != value2 ){ /* above loop touches key1 917 again making key 2 as LRU */
 	FAIL(" Returned Incorrecct LRU Value from HT!");
     }
 
     if ( LruTable_Lookup(table, key2, &res1) ) {
 	FAIL(" LRU_Remove failed for an already inserted key value pair, pair is still present in HT!");
     }
-//    std::cout << "Size of HT: " << i << " "<<table->currentSize << std::endl;
-    
 
+    /* Now check for a subset of LRU list */
     for ( i = 210; i<900 ; i++) {
-//	std::cout << "INDEX I : " << i;
+	res1 = 0;
+
 	if ( !LruTable_RemoveOldest(table, &res1) ) {
 	    FAIL(" Could not find a LRU entry in aleady setup HT!");
 	}
 	else if ( res1 != i+1 ){
-	    std::cout << "RET VAL: " << res1 << std::endl;
+	    std::cout << "Remove Oldest Failed for key: " << i << "Value:  " << res1  << std::endl;
 	    FAIL(" Returned Incorrecct LRU Value from HT! -BIG LOOP");
         }
 
 	if ( LruTable_Lookup(table, i, &res1) ) {
-	    FAIL(" LRU_Remove failed for an already inserted key value pair, pair is still present in HT!");
+	    std::cout << "Oldest entry removed above is still present:Key:  " << i << std::endl;
+	    FAIL(" LRU_Remove failed for an already inserted key value pair, pair is still present in HT -2!");
         }
-//	std::cout << "COUNT: " << i;
     }
 
 
@@ -372,33 +393,39 @@ TEST(HashTable, Test_LruTable_RemoveOldest)
 //    std::cout << " COLLISION : " << colli << " " << lruLen << std::endl;
     if ( lruLen != 900 || table->currentSize != 900 )
 	FAIL(" Incorrect Len of LRU list after removing 900 oldest. Should be 900 now!");
+
 }
 
 
-
+/*
+ * Test to check the performance of the HT.
+ * Basically looks for the Number of collisions
+ * and longest chain size in the cases of collisions.
+ *
+ */
 TEST(HashTable, Test_HT_Collosion_Performance)
 {
-    
     struct __node *current = NULL, *tmp;
     struct __lru *cur = NULL;
     uint64_t colli = 0, start = 0, lruLen = 0, step = 0, maxchain = 0;
     int i;
 
-    srand ( time(NULL) );
-    start = rand();
+    srand (time(NULL));
+
     if ( table->currentSize != 0 )
 	FAIL(" Incorrect current Size. Should be 0 now!!. ");
 
-    for ( i = 0; i < (table->maxSize); i++) {
+    for ( i = 1; i <(table->maxSize); i++) {
 	LruTable_Insert(table, start+i, start+i+1);
     }
-    std::cout << table->maxSize << " " << table->currentSize << " " << maxSize << std::endl;
+//    std::cout << table->maxSize << " " << table->currentSize << " " << maxSize << std::endl;
     
-    if ( table->currentSize != (table->maxSize) ) {
+    if ( table->currentSize != (table->maxSize-1) ) {
 	std::cout << table->maxSize << " " << table->currentSize << " " << maxSize << std::endl;
-	FAIL(" Incorrect current Size. Should be maxSize now!!. ");
+	FAIL(" Incorrect current Size. Should be maxSize-1 now!!. ");
     }
 
+    /* Count the collision manually */
     colli = 0;
     for ( i = 0; i < maxSize; i++) {
 	current = table->htArray[i].chain;
@@ -419,5 +446,6 @@ TEST(HashTable, Test_HT_Collosion_Performance)
 	++lruLen;
 	cur = cur->next;
     }
-    std::cout << " COLLISION : " << colli << " " << lruLen << " " << " Collision % = " << (colli*100)/lruLen << " MAX CHAIN: " << maxchain << std::endl;
+    std::cout << " Collisions : " << colli << " Total Size: " << lruLen << " " << " Collision % = " 
+	<< (colli*100)/lruLen << " MAX Size of CHAIN: " << maxchain << std::endl;
 }
